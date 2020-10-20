@@ -4,7 +4,6 @@ import { Deferred, createDeferred } from '@suite-utils/deferred';
 import { urlHashParams, urlSearchParams } from '@suite-utils/metadata';
 
 /**
- * For desktop, always use oauth_receiver.html from trezor.io
  * For web, use oauth_receiver.html hosted on the same origin (localhost/sldev/trezor.io)
  */
 export const getOauthReceiverUrl = () => {
@@ -16,13 +15,14 @@ export const getOauthReceiverUrl = () => {
     // start oauth-receiver http service and wait for address
     return new Promise<string>((resolve, reject) => {
         const onGetServerAddress = (message: string) => {
+            // todo: revoke to invoke/handle
             window.desktopApi!.off('server/address', onGetServerAddress);
             if (message) {
                 return resolve(message);
             }
             return reject(new Error('no response'));
         };
-
+        // todo: revoke to invoke/handle
         window.desktopApi!.on('server/address', onGetServerAddress);
         window.desktopApi!.send('server/request-address', '/oauth');
     });
@@ -31,10 +31,10 @@ export const getOauthReceiverUrl = () => {
 /**
  * Handle extraction of authorization code from Oauth2 protocol
  */
-export const getOauthCode = (url: string) => {
+export const extractCredentialsFromAuthorizationFlow = (url: string) => {
     const originalParams = urlHashParams(url);
 
-    const dfd: Deferred<string> = createDeferred();
+    const dfd: Deferred<{ code?: string; access_token?: string }> = createDeferred();
 
     const onMessageWeb = (e: MessageEvent) => {
         // filter non oauth messages
@@ -48,14 +48,16 @@ export const getOauthCode = (url: string) => {
 
         if (typeof e.data !== 'string') return;
 
+        console.warn('e.data', e.data);
         const params = urlSearchParams(e.data);
+        console.log('params', params);
 
         if (originalParams.state && params.state !== originalParams.state) {
             dfd.reject(new Error('state does not match'));
         }
 
-        if (params.code) {
-            dfd.resolve(params.code);
+        if (params.code || params.access_token) {
+            dfd.resolve(params);
         } else {
             dfd.reject(new Error('Cancelled'));
         }
@@ -66,13 +68,14 @@ export const getOauthCode = (url: string) => {
     if (desktopApi) {
         const onMessageDesktop = (code: string) => {
             if (code) {
-                dfd.resolve(code);
+                dfd.resolve({ code });
             } else {
                 dfd.reject(new Error('Cancelled'));
             }
+            // todo: revoke to invoke/handle
             desktopApi.off('oauth/code', onMessageDesktop);
         };
-
+        // todo: revoke to invoke/handle
         desktopApi.on('oauth/code', onMessageDesktop);
     } else {
         window.addEventListener('message', onMessageWeb);

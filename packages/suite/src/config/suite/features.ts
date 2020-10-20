@@ -5,7 +5,7 @@
 
 // General flags
 export const FLAGS = {
-    GOOGLE_DRIVE_SYNC: false, // Google Drive sync (used for labeling)
+    GOOGLE_DRIVE_SYNC: true, // Google Drive sync (used for labeling)
     RBF: false, // replace by fee feature in the send form
 } as const;
 

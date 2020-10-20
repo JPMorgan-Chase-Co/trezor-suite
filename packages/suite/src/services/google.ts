@@ -10,7 +10,7 @@
 
 import { OAuth2Client, CodeChallengeMethod } from 'google-auth-library';
 import { METADATA } from '@suite-actions/constants';
-import { getOauthCode, getOauthReceiverUrl } from '@suite-utils/oauth';
+import { extractCredentialsFromAuthorizationFlow, getOauthReceiverUrl } from '@suite-utils/oauth';
 import { getCodeChallenge } from '@suite-utils/random';
 
 const SCOPES = 'https://www.googleapis.com/auth/drive.appdata';
@@ -95,45 +95,87 @@ class Client {
         this.token = token;
         this.nameIdMap = {};
         this.oauth2Client = new OAuth2Client({
-            clientId: METADATA.GOOGLE_CLIENT_ID,
+            clientId:
+                process.env.SUITE_TYPE === 'web'
+                    ? METADATA.GOOGLE_CLIENT_ID_WEB
+                    : METADATA.GOOGLE_CLIENT_ID_DESKTOP,
         });
+
         this.oauth2Client.on('tokens', tokens => {
-            if (tokens.refresh_token) {
+            console.warn('tokens handler', tokens);
+
+            if (tokens.refresh_token && process.env.SUITE_TYPE === 'desktop') {
                 this.token = tokens.refresh_token;
             }
+            if (tokens.access_token && process.env.SUITE_TYPE === 'web') {
+                this.token = tokens.access_token;
+            }
         });
-        if (token) {
+
+        if (token && process.env.SUITE_TYPE === 'desktop') {
             this.oauth2Client.setCredentials({
-                // set only refresh_token, which is stored in long term storage. oauth2Client will
-                // exchange it for access_token and store it for subsequent calls.
                 refresh_token: token,
+            });
+        }
+        if (token && process.env.SUITE_TYPE === 'web') {
+            this.oauth2Client.setCredentials({
+                access_token: token,
             });
         }
     }
 
     async authorize() {
+        console.log('authorize');
         const redirectUri = await getOauthReceiverUrl();
         if (!redirectUri) return;
 
         const random = getCodeChallenge();
-        const url = this.oauth2Client.generateAuthUrl({
-            access_type: 'offline',
+
+        const options = {
             scope: SCOPES,
             redirect_uri: redirectUri,
-            code_challenge: random,
-            code_challenge_method: CodeChallengeMethod.Plain, // todo: use sha256 because why not
-        });
+        };
 
-        const code = await getOauthCode(url);
+        switch (process.env.SUITE_TYPE) {
+            case 'desktop':
+                // authorization code flow with PKCE
+                Object.assign(options, {
+                    access_type: 'offline',
+                    code_challenge: random,
+                    code_challenge_method: CodeChallengeMethod.Plain,
+                });
+                break;
+            case 'web':
+                // implicit flow
+                Object.assign(options, { access_type: 'online', response_type: 'token' });
+                break;
+            default:
+            // do nothing. throwing here would be breaking case in case of removing a provider;
+        }
 
-        // code is retrieved and exchanged for access_token and refresh_token
-        const { tokens } = await this.oauth2Client.getToken({
-            code,
-            redirect_uri: redirectUri,
-            codeVerifier: random,
-        });
+        const url = this.oauth2Client.generateAuthUrl(options);
+        console.log('url', url);
 
-        this.oauth2Client.setCredentials(tokens);
+        // todo: rename
+        const { access_token, code } = await extractCredentialsFromAuthorizationFlow(url);
+        console.warn('code', code);
+        console.warn('process.env.SUITE_TYPE', process.env.SUITE_TYPE);
+        // implicit flow returns short lived access_token directly
+        if (access_token) {
+            this.token = access_token;
+            this.oauth2Client.setCredentials({ access_token });
+            return;
+        }
+
+        // otherwise authorization code which is to be exchanged for tokens is retrieved
+        if (code) {
+            const { tokens } = await this.oauth2Client.getToken({
+                code,
+                redirect_uri: redirectUri,
+                codeVerifier: random,
+            });
+            this.oauth2Client.setCredentials(tokens);
+        }
     }
 
     /**
@@ -150,6 +192,7 @@ class Client {
 
     async getTokenInfo(): Promise<GetTokenInfoResponse> {
         const response = await this.call(
+            // todo:
             `https://www.googleapis.com/drive/v3/about?fields=user&access_token=${this.token}`,
             { method: 'GET' },
             {},
@@ -287,6 +330,7 @@ class Client {
             const query = new URLSearchParams(apiParams.query as Record<string, string>).toString();
             url += `?${query}`;
         }
+
         const accessToken = await this.oauth2Client.getAccessToken();
 
         const fetchOptions = {

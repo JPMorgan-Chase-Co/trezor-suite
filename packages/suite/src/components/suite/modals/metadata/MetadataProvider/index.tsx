@@ -56,6 +56,7 @@ const MetadataProvider = (props: Props) => {
 
     const connect = async (type: MetadataProviderType) => {
         setIsLoading(type);
+        console.log('connect', type);
         const result = await connectProvider(type);
         if (!result) {
             setIsLoading('');

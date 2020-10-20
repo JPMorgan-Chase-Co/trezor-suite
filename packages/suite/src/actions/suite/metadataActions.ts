@@ -53,7 +53,7 @@ const createProvider = (
         case 'google':
             return new GoogleProvider(token);
         default:
-            throw new Error(`provider of type ${type} is not implemented`);
+        // do nothing. throwing here would be breaking case in case of removing a provider;
     }
 };
 
@@ -392,12 +392,20 @@ const syncMetadataKeys = () => (dispatch: Dispatch, getState: GetState) => {
 
 export const connectProvider = (type: MetadataProviderType) => async (dispatch: Dispatch) => {
     let provider = await dispatch(getProvider());
+
     if (!provider) {
         provider = createProvider(type);
     }
+    console.log('provider', provider);
+
+    if (!provider) {
+        return;
+    }
+
     const isConnected = await provider.isConnected();
     if (provider && !isConnected) {
         const connected = await provider.connect();
+        console.log('connected', connected);
         if (!connected) {
             return;
         }
