@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import styled from 'styled-components';
 import { FormattedDate } from 'react-intl';
 import { colors } from '@trezor/components';
@@ -120,13 +120,15 @@ const CustomTooltipBase = (props: Props) => {
                 ? 'month'
                 : 'day';
 
-        if (props.onShow && props.extendedDataForInterval) {
-            props.onShow(
-                props.extendedDataForInterval.findIndex(
-                    item => item.time === props.payload![0].payload.time,
-                ),
-            );
-        }
+        useEffect(() => {
+            if (props.onShow && props.extendedDataForInterval) {
+                props.onShow(
+                    props.extendedDataForInterval.findIndex(
+                        item => item.time === props.payload![0].payload.time,
+                    ),
+                );
+            }
+        }, [])
 
         return (
             <CustomTooltipWrapper coordinate={props.coordinate!}>
