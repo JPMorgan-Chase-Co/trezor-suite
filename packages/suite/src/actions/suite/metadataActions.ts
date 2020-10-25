@@ -16,7 +16,7 @@ import * as modalActions from '@suite-actions/modalActions';
 import * as notificationActions from '@suite-actions/notificationActions';
 import DropboxProvider from '@suite/services/metadata/DropboxProvider';
 import GoogleProvider from '@suite/services/metadata/GoogleProvider';
-import UserDataProvider from '@suite/services/metadata/UserDataProvider';
+import FileSystemProvider from '@suite/services/metadata/FileSystemProvider';
 // import { isDesktop } from '@suite-utils/env';
 
 // todo: think, what is the philosophy behind local sync? is it on the same level
@@ -51,7 +51,7 @@ export type MetadataActions =
       };
 
 // needs to be declared here in top level context because it's not recommended to keep classes instances in redux state (serialization)
-let providerInstance: DropboxProvider | GoogleProvider | UserDataProvider | undefined;
+let providerInstance: DropboxProvider | GoogleProvider | FileSystemProvider | undefined;
 const fetchIntervals: { [deviceState: string]: any } = {}; // any because of native at the moment, otherwise number | undefined
 
 const createProvider = (type: MetadataProvider['type'], token?: MetadataProvider['token']) => {
@@ -60,10 +60,10 @@ const createProvider = (type: MetadataProvider['type'], token?: MetadataProvider
             return new DropboxProvider(token);
         case 'google':
             return new GoogleProvider(token);
-        case 'userData':
-            return new UserDataProvider();
+        case 'fileSystem':
+            return new FileSystemProvider();
         default:
-            throw new Error(`provider of type ${type} is not implemented`);
+            throw new Error(`metadata provider of type ${type} is not defined`);
     }
 };
 
